@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PSE Performance Dashboard · April 2026</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" onerror="this.onerror=null;this.href='https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css'" />
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="header">
+  <div class="header-left">
+    <div class="logo"><span class="logo-icon">☀️</span> PSE <span>Performance Dashboard</span></div>
+    <div id="mode-label">FLEET VIEW — 44 SITES</div>
+  </div>
+  <div class="header-right">
+    <div class="subtitle">APRIL 2026 · OPERATIONS DASHBOARD</div>
+    <div id="theme-toggle" onclick="toggleTheme()" title="Toggle Dark / Light Mode">
+      <span class="theme-icon" id="theme-icon">☀️</span>
+      <div class="theme-track"><div class="theme-knob"></div></div>
+      <span class="theme-label" id="theme-label">Light</span>
+    </div>
+    <button id="reset-btn" onclick="resetFilters()">↺ RESET ALL</button>
+  </div>
+</div>
+
+<div id="filter-row">
+  <div class="filter-group">
+    <span class="filter-label">Site</span>
+    <select id="site-select" onchange="applySiteFilter()">
+      <option value="ALL">All Sites (44)</option>
+    </select>
+  </div>
+  <div class="filter-group">
+    <span class="filter-label">From</span>
+    <input type="date" id="date-from" value="2026-04-01" onchange="applyFilters()">
+    <span class="filter-label">To</span>
+    <input type="date" id="date-to" value="2026-04-30" onchange="applyFilters()">
+  </div>
+  <div class="filter-group">
+    <span class="filter-label">Week</span>
+    <div class="week-toggles">
+      <button class="week-btn" onclick="toggleWeek(14)">WK14</button>
+      <button class="week-btn" onclick="toggleWeek(15)">WK15</button>
+      <button class="week-btn" onclick="toggleWeek(16)">WK16</button>
+      <button class="week-btn" onclick="toggleWeek(17)">WK17</button>
+      <button class="week-btn" onclick="toggleWeek(18)">WK18</button>
+    </div>
+  </div>
+</div>
+
+<div id="chart-filter-row">
+  <span class="chart-filter-label">📊 Show Charts</span>
+  <button class="chart-toggle-btn active" data-chart="site-bar" onclick="toggleChart('site-bar', this)">Site Ranking</button>
+  <button class="chart-toggle-btn active" data-chart="monthly-bar" onclick="toggleChart('monthly-bar', this)">Daily Actual vs Expected</button>
+  <button class="chart-toggle-btn active" data-chart="daily-line" onclick="toggleChart('daily-line', this)">Daily Energy + PR</button>
+  <button class="chart-toggle-btn active" data-chart="heatmap" onclick="toggleChart('heatmap', this)">PR Heatmap</button>
+  <button class="chart-toggle-btn active" data-chart="weekly-bar" onclick="toggleChart('weekly-bar', this)">Weekly Actual/Expected</button>
+  <button class="chart-toggle-btn active" data-chart="waterfall" onclick="toggleChart('waterfall', this)">Energy Waterfall</button>
+  <button class="chart-toggle-btn active" data-chart="curtailment" onclick="toggleChart('curtailment', this)">Downtime</button>
+  <button class="chart-toggle-btn active" data-chart="scatter" onclick="toggleChart('scatter', this)">Energy vs Inverter Power</button>
+  <button class="chart-toggle-btn active" data-chart="irradiance" onclick="toggleChart('irradiance', this)">Irradiance vs Energy</button>
+  <button class="chart-toggle-btn active" data-chart="table" onclick="toggleChart('table', this)">Underperforming Sites</button>
+  <button class="chart-toggle-btn active" data-chart="er-trend" onclick="toggleChart('er-trend', this)">ER Trend</button>
+  <button id="chart-filter-toggle-all" onclick="toggleAllCharts()">Hide All</button>
+</div>
+
+<div id="main">
+  <!-- KPI Cards -->
+  <div id="kpi-row" style="margin-bottom:4px;">
+    <div class="kpi-card green">
+      <div class="kpi-label">Total Generation</div>
+      <div class="kpi-value" id="kpi-gen">—</div>
+      <div class="kpi-sub"><span class="rag green"></span> <span id="kpi-gen-sub">44 sites · Apr 2026</span></div>
+    </div>
+    <div class="kpi-card amber">
+      <div class="kpi-label">Fleet Avg Performance Ratio</div>
+      <div class="kpi-value" id="kpi-pr">—</div>
+      <div class="kpi-sub"><span class="rag" id="rag-pr"></span> <span id="kpi-pr-sub">IEC 61724 standard</span></div>
+    </div>
+    <div class="kpi-card blue">
+      <div class="kpi-label">Capacity Utilization Factor</div>
+      <div class="kpi-value" id="kpi-cuf">—</div>
+      <div class="kpi-sub"><span class="rag" id="rag-cuf"></span> <span id="kpi-cuf-sub">vs DC nameplate</span></div>
+    </div>
+    <div class="kpi-card cyan">
+      <div class="kpi-label">Fleet Availability</div>
+      <div class="kpi-value" id="kpi-avail">—</div>
+      <div class="kpi-sub"><span class="rag" id="rag-avail"></span> <span id="kpi-avail-sub">excl. force majeure</span></div>
+    </div>
+    <div class="kpi-card red">
+      <div class="kpi-label">Total Downtime Loss</div>
+      <div class="kpi-value" id="kpi-dt">—</div>
+      <div class="kpi-sub"><span class="rag red"></span> <span id="kpi-dt-sub">curtailment + outages</span></div>
+    </div>
+  </div>
+
+  <!-- Site Ranked Bar (full width) -->
+  <div class="chart-row">
+    <div class="chart-card full accent-leaf" data-section="site-bar">
+      <div class="chart-header">
+        <div class="chart-title">Site Generation Ranking</div>
+        <div class="chart-subtitle">April total MWh per site · color = PR tier (green ≥85% / amber 70–85% / red &lt;70%)</div>
+      </div>
+      <div class="chart-wrap"><canvas id="chart-site-bar" height="320"></canvas></div>
+      <div class="chart-source">Source: Production Meter Energy · Click bar to drill into site</div>
+    </div>
+  </div>
+
+  <!-- SECTION DIVIDER: GENERATION ANALYSIS -->
+  <div class="section-divider">
+    <span class="section-divider-label">Generation Analysis</span>
+  </div>
+
+  <!-- Monthly Bar + Daily Line (55/45 split) -->
+  <div class="chart-row">
+    <div class="chart-card" style="flex: 0 0 calc(55% - 6px);" data-section="monthly-bar">
+      <div class="chart-header">
+        <div class="chart-title">Daily Actual vs Expected Generation</div>
+        <div class="chart-subtitle">Red bars = actual &lt;95% of expected (>5% shortfall)</div>
+      </div>
+      <div class="chart-wrap"><canvas id="chart-monthly-bar" height="200"></canvas></div>
+      <div class="chart-source">Source: Prod Meter Energy vs Expected Energy</div>
+    </div>
+    <div class="chart-card" style="flex: 0 0 calc(45% - 6px);" data-section="daily-line">
+      <div class="chart-header">
+        <div class="chart-title">Fleet Daily Energy + PR Trend</div>
+        <div class="chart-subtitle">Actual MWh (bars) · Avg PR % (line) · 7-day rolling average</div>
+      </div>
+      <div class="chart-wrap"><canvas id="chart-daily-line" height="200"></canvas></div>
+      <div class="chart-source">Source: Production Meter Energy · Performance Ratio</div>
+    </div>
+  </div>
+
+  <!-- PR Heatmap full width -->
+  <div class="chart-row">
+    <div class="chart-card full accent-top-gradient" style="padding: 18px 20px;" data-section="heatmap">
+      <div class="chart-header">
+        <div class="chart-title">Performance Ratio Calendar Heatmap</div>
+        <div class="chart-subtitle">Click any day to see site breakdown · color = fleet avg PR (green ≥0.85 / amber 0.70–0.85 / red &lt;0.70)</div>
+      </div>
+      <div id="heatmap-grid"></div>
+      <div class="chart-source">Source: Site Performance Index (IEC 61724) · ISO weeks 14–18</div>
+    </div>
+  </div>
+
+  <!-- SECTION DIVIDER: LOSS BREAKDOWN -->
+  <div class="section-divider">
+    <span class="section-divider-label">Loss Breakdown</span>
+  </div>
+
+  <!-- Weekly Actual/Expected + Waterfall (side by side) -->
+  <div class="chart-row">
+    <div class="chart-card half" data-section="weekly-bar">
+      <div class="chart-header">
+        <div class="chart-title">Weekly Actual vs Expected Energy</div>
+        <div class="chart-subtitle">% variance labels · flag &gt;10% underperformance in red</div>
+      </div>
+      <div class="chart-wrap"><canvas id="chart-weekly-bar" height="200"></canvas></div>
+      <div class="chart-source">Source: Production Meter Energy vs Expected Energy · ISO weeks</div>
+    </div>
+    <div class="chart-card half" data-section="waterfall">
+      <div class="chart-header">
+        <div class="chart-title">Weekly Energy Waterfall</div>
+        <div class="chart-subtitle">Estimated → Actual → Downtime → Unexplained loss per week</div>
+      </div>
+      <div class="chart-wrap"><canvas id="chart-waterfall" height="200"></canvas></div>
+      <div class="chart-source">Source: Estimated Production vs Prod Meter Energy vs Downtime Loss</div>
+    </div>
+  </div>
+
+  <!-- Curtailment + Scatter (40/60 split) -->
+  <div class="chart-row">
+    <div class="chart-card" style="flex: 0 0 calc(40% - 6px);" data-section="curtailment">
+      <div class="chart-header">
+        <div class="chart-title">Daily Downtime</div>
+        <div class="chart-subtitle">Daily loss bars (MWh) + cumulative line + % of expected (secondary axis)</div>
+      </div>
+      <div class="chart-wrap"><canvas id="chart-curtailment" height="200"></canvas></div>
+      <div class="chart-source">Source: Downtime Loss kWh</div>
+    </div>
+    <div class="chart-card" style="flex: 0 0 calc(60% - 6px);" data-section="scatter">
+      <div class="chart-header">
+        <div class="chart-title">Expected Energy vs Inverter Power</div>
+        <div class="chart-subtitle">One point per site-day · regression line · color = site</div>
+      </div>
+      <div class="chart-wrap"><canvas id="chart-scatter" height="200"></canvas></div>
+      <div class="chart-source">Source: Estimated Production kWh (X) vs Inverter Power kW (Y)</div>
+    </div>
+  </div>
+
+  <!-- SECTION DIVIDER: SYSTEM PERFORMANCE -->
+  <div class="section-divider">
+    <span class="section-divider-label">System Performance</span>
+  </div>
+
+  <!-- Irradiance vs Energy -->
+  <div class="chart-row">
+    <div class="chart-card full accent-sky" data-section="irradiance">
+      <div class="chart-header">
+        <div class="chart-title">Expected Energy (Irradiance Proxy) vs Actual Inverter Energy</div>
+        <div class="chart-subtitle">Gap between area and line = conversion loss · wide gap = system inefficiency</div>
+      </div>
+      <div class="chart-wrap"><canvas id="chart-irradiance" height="200"></canvas></div>
+      <div class="chart-source">Source: Expected Energy kWh vs Inverter Energy kWh · daily fleet totals</div>
+    </div>
+  </div>
+
+  <!-- SECTION DIVIDER: SITE INTELLIGENCE -->
+  <div class="section-divider">
+    <span class="section-divider-label">Site Intelligence</span>
+  </div>
+
+  <!-- Underperforming Sites (w60) + Energy Ratio Trend (w40) — side by side -->
+  <div class="chart-row" style="gap:16px;">
+    <div class="chart-card w60 accent-top-sun" data-section="table">
+      <div class="chart-header">
+        <div class="chart-title">Underperforming Sites</div>
+        <div class="chart-subtitle">Bottom 6 sites by avg Performance Ratio · April 2026</div>
+      </div>
+      <div id="underperforming-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:4px;"></div>
+    </div>
+    <div class="chart-card w40 accent-top-coral" data-section="er-trend">
+      <div class="chart-header">
+        <div class="chart-title">Energy Ratio Trend — Top/Bottom Sites</div>
+        <div class="chart-subtitle">Top 5 vs Bottom 5 by avg Energy Ratio · red = ER &lt; 0.85</div>
+      </div>
+      <div class="chart-wrap"><canvas id="chart-er-trend" height="320"></canvas></div>
+      <div class="chart-source">Source: Energy Ratio field · daily values</div>
+    </div>
+  </div>
+</div>
+
+<!-- Detail Panel -->
+<div id="detail-panel">
+  <button class="panel-close" onclick="closePanel()">✕</button>
+  <div class="panel-title" id="panel-title">—</div>
+  <div class="panel-subtitle" id="panel-subtitle">—</div>
+  <div class="panel-grid" id="panel-metrics"></div>
+  <div class="panel-section">Site Breakdown</div>
+  <div id="panel-sites"></div>
+</div>
+
+<!-- Site Locations Map -->
+<div id="map-section">
+  <div id="map-section-title">Fleet Overview</div>
+  <div id="map-section-heading">📍 Site Locations Map</div>
+  <div id="map-section-sub">Zoom, pan, and inspect plant locations across the US with site-level popups. Select a site in the filter above to highlight it on the map.</div>
+  <div id="site-map"></div>
+</div>
+
+
+<!-- Leaflet (with CDN fallback) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>if (typeof L === "undefined") { document.write('<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"><\/script>'); }</script>
+
+<!-- App scripts: data first, then logic -->
+<script src="data.js"></script>
+<script src="script.js"></script>
+
+</body>
+</html>
